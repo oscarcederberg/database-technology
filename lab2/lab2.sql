@@ -1,4 +1,13 @@
+PRAGMA foreign_keys=OFF;
+
 DROP TABLE IF EXISTS customers;
+DROP TABLE IF EXISTS theatres;
+DROP TABLE IF EXISTS movies;
+DROP TABLE IF EXISTS performances;
+DROP TABLE IF EXISTS tickets;
+
+PRAGMA foreign_keys=ON;
+
 CREATE TABLE customers (
     username     TEXT NOT NULL,
     name         TEXT NOT NULL,
@@ -6,14 +15,12 @@ CREATE TABLE customers (
     PRIMARY KEY  (username)
 );
 
-DROP TABLE IF EXISTS theatres;
 CREATE TABLE theatres (
     name         TEXT NOT NULL,
     capacity     INTEGER NOT NULL CHECK (capacity > 0),
     PRIMARY KEY  (name)
 );
 
-DROP TABLE IF EXISTS movies;
 CREATE TABLE movies (
     imdb_id     CHAR(9),
     title       TEXT NOT NULL,
@@ -22,7 +29,6 @@ CREATE TABLE movies (
     PRIMARY KEY (imdb_id)
 );
 
-DROP TABLE IF EXISTS performances;
 CREATE TABLE performances (
     performance_id  TEXT DEFAULT (lower(hex(randomblob(16)))),
     name            TEXT NOT NULL,
@@ -30,21 +36,18 @@ CREATE TABLE performances (
     date            DATE,
     time            TIME,
     PRIMARY KEY (performance_id),
-    FOREIGN KEY (name) REFERENCES theatres.name,
-    FOREIGN KEY (imdb_id) REFERENCES movies.imdb_id
+    FOREIGN KEY (name) REFERENCES theatres(name),
+    FOREIGN KEY (imdb_id) REFERENCES movies(imdb_id)
 );
 
-DROP TABLE IF EXISTS tickets;
 CREATE TABLE tickets (
     ticket_id       TEXT DEFAULT (lower(hex(randomblob(16)))),
     username        TEXT NOT NULL,
     performance_id  TEXT NOT NULL,
     PRIMARY KEY (ticket_id),
-    FOREIGN KEY (username) REFERENCES customers.username,
-    FOREIGN KEY (performance_id) REFERENCES performances.performance_id
-)
-
-BEGIN TRANSACTION;
+    FOREIGN KEY (username) REFERENCES customers(username),
+    FOREIGN KEY (performance_id) REFERENCES performances(performance_id)
+);
 
 INSERT OR REPLACE
 INTO customers(username, name, password)
@@ -66,15 +69,13 @@ VALUES ('dc1234567', 'Dösjebro Calling', 2010, 180),
 
 INSERT OR REPLACE
 INTO performances(performance_id, name, imdb_id, date, time)
-VALUES (DEFAULT, 'Filmstaden Lund', 'dc1234567', '2022-02-08', '18:30'),
-(DEFAULT, 'Filmstaden Lund', 'dc1234567', '2022-02-08', '22:00'),
-(DEFAULT, 'Filmstaden Lund', 'dc1234567', '2022-02-09', '18:30'),
-(DEFAULT, 'Filmstaden Lund', 'ts0000000', '2022-02-08', '22:00'),
-(DEFAULT, 'Filmstaden Malmö', 'dc1234567', '2022-02-08', '16:30'),
-(DEFAULT, 'Filmstaden Malmö', 'nn1234567', '2022-02-08', '20:00'),
-(DEFAULT, 'Filmstaden Eslöv', 'nn1234567', '2022-02-08', '12:00'),
-(DEFAULT, 'Filmstaden Eslöv', 'nn1234567', '2022-02-08', '14:00'),
-(DEFAULT, 'Filmstaden Eslöv', 'nn1234567', '2022-02-08', '16:00'),
-(DEFAULT, 'Filmstaden Eslöv', 'nn1234567', '2022-02-08', '18:00');
-
-END TRANSACTION;
+VALUES (lower(hex(randomblob(16))), 'Filmstaden Lund', 'dc1234567', '2022-02-08', '18:30'),
+( lower(hex(randomblob(16))) , 'Filmstaden Lund', 'dc1234567', '2022-02-08', '22:00'),
+( lower(hex(randomblob(16))) , 'Filmstaden Lund', 'dc1234567', '2022-02-09', '18:30'),
+( lower(hex(randomblob(16))) , 'Filmstaden Lund', 'ts0000000', '2022-02-08', '22:00'),
+( lower(hex(randomblob(16))) , 'Filmstaden Malmö', 'dc1234567', '2022-02-08', '16:30'),
+( lower(hex(randomblob(16))) , 'Filmstaden Malmö', 'nn1234567', '2022-02-08', '20:00'),
+( lower(hex(randomblob(16))) , 'Filmstaden Eslöv', 'nn1234567', '2022-02-08', '12:00'),
+( lower(hex(randomblob(16))) , 'Filmstaden Eslöv', 'nn1234567', '2022-02-08', '14:00'),
+( lower(hex(randomblob(16))) , 'Filmstaden Eslöv', 'nn1234567', '2022-02-08', '16:00'),
+( lower(hex(randomblob(16))) , 'Filmstaden Eslöv', 'nn1234567', '2022-02-08', '18:00');
