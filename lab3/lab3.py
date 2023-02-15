@@ -1,3 +1,4 @@
+from urllib.parse import unquote
 from bottle import get, post, run, request, response
 import sqlite3
 
@@ -80,7 +81,7 @@ def get_ping():
 @post('/reset')
 def post_reset():
     c = db.cursor()
-    c.executescript(reset_script)
+    c.executescript(RESET_SCRIPT)
     return "Database reset"
 
 # post	users			            ".../username" 201 / "" 400
@@ -92,8 +93,8 @@ def post_users():
         """
         INSERT
         INTO        users(username, fullName, pwd)
-        VALUES      ('?', '?', '?')
-        RETURNING   last_insert_rowid()
+        VALUES      (?, ?, ?)
+        RETURNING   username
         """,
         [user['username'], user['fullName'], user['pwd']]
     )
@@ -105,19 +106,19 @@ def post_users():
         db.commit()
         response.status = 201
         username, = found
-        return f"http://localhost:{PORT}/users/{username}"
+        return f"/users/{username}"
 
 # post	movies			            ".../imdbkey" 201 / "" 400
 @post('/movies')
 def post_movies():
     movie = request.json
-    c =sor()
+    c = db.cursor()
     c.execute(
         """
         INSERT
         INTO        movies(imdbKey, title, year)
         VALUES      (?, ?, ?)
-        RETURNING imdbKey
+        RETURNING   imdbKey
         """,
         [movie['imdbKey'], movie['title'], movie['year']]
     )
@@ -129,32 +130,27 @@ def post_movies():
         db.commit()
         response.status = 201
         imdbKey, = found
-        return f"http://localhost:{PORT}/movies/{imdbKey}"
+        return f"/movies/{imdbKey}"
 
 # get	movies                      list with all movies
-@get('/movies')
-def get_movies():
-    c = db.cursor()
-    c.execute(
-        """
-        """
-    )
-    found = [{}]
-    response.status = 200
-    return {"data": found}
-
 # get	movies ?params              list with movies with params
 @get('/movies')
 def get_movies():
     query = """
+        SELECT imdbKey, title, year
+        FROM movies
+        WHERE 1 = 1
         """
     params = []
     if request.query.title:
-        query += ""
+        query += " AND title == ?"
         params.append(unquote(request.query.title))
+    if request.query.year:
+        query += " AND year == ?"
+        params.append(unquote(request.query.year))
     c = db.cursor()
     c.execute(query, params)
-    found = [{}]
+    found = [{"imdbKey":imdbKey, "title":title, "year":year} for imdbKey, title, year in c]
     response.status = 200
     return {"data": found}
 
@@ -164,9 +160,14 @@ def get_movies(imdbKey):
     c = db.cursor()
     c.execute(
         """
-        """
+        SELECT imdbKey, title, year
+        FROM movies
+        WHERE imdbKey = ?
+        """,
+        [imdbKey]
     )
-    found = [{}]
+    found = [{"imdbKey": imdbKey, "title": title, "year": year}
+        for imdbKey, title, year in c]
     response.status = 200
     return {"data": found}
 
@@ -177,17 +178,22 @@ def post_performances():
     c = db.cursor()
     c.execute(
         """
-        """
+        INSERT
+        INTO        performances(theater, imdbKey, date, startTime)
+        VALUES      (?, ?, ?, ?)
+        RETURNING   performanceId
+        """,
+        [performance['theater'], performance['imdbKey'], performance['date'], performance['time']]
     )
-    found = [{}]
+    found = c.fetchone()
     if not found:
         response.status = 400
-        return "Illegal..."
+        return "No such movie or theater"
     else:
         db.commit()
         response.status = 201
-        _ = found
-        return f""
+        performanceId, = found
+        return f"/performances/{performanceId}"
 
 # get	performances                list with all performances
 @get('/performances')
@@ -195,9 +201,20 @@ def get_performances():
     c = db.cursor()
     c.execute(
         """
+        WITH tickets_for_performance(performanceId, tickets) AS (
+            SELECT performanceId, COUNT(*) as tickets
+            FROM tickets
+            GROUP BY performanceId
+        )
+        SELECT performanceId, date, startTime, movies.title, movies.year, theater, capacity - count(tickets) AS remainingSeats
+        FROM performances
+        LEFT OUTER JOIN movies USING (imdbKey)
+        LEFT OUTER JOIN theaters USING (theater)
+        LEFT OUTER JOIN tickets_for_performance USING (performanceId)
         """
     )
-    found = [{}]
+    found = [{"performanceId":performanceId, "date": date, "startTime":startTime, "title": title, "year":year, "theater":theater,"remainingSeats":remainingSeats}
+                for performanceId, date, startTime, title, year, theater, remainingSeats in c]
     response.status = 200
     return {"data": found}
 
@@ -226,9 +243,21 @@ def get_tickets(username):
     c = db.cursor()
     c.execute(
         """
-        """
+        WITH tickets_for_user(username, performanceId, tickets) AS (
+            SELECT performanceId, username, COUNT(*) as tickets
+            FROM tickets
+            GROUP BY performanceId, username
+        )
+        SELECT date, startTime, theater, title, year, count(tickets) as nbrOfTickets
+        FROM tickets
+        JOIN performances ON (performanceId)
+        JOIN tickets_for_user ON (username)
+        WHERE username = ?
+        """,
+        [username]
     )
-    found = [{}]
+    found = [{"date": date, "startTime": startTime, "theater": theater, "title": title, "year": year, "nbrOfTickets": nbrOfTickets}
+        for date, startTime, theater, title, year, nbrOfTickets in c]
     response.status = 200
     return {"data": found}
 
