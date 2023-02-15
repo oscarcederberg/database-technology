@@ -111,7 +111,7 @@ def check_post_user():
         ok("POST", resource)
     except Exception as e:
         abort_on_resource("POST", resource, f"crashes ({e})")
-    
+
 
 def check_post_movie():
     resource = url("/movies")
