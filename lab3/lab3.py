@@ -201,15 +201,15 @@ def get_performances():
     c = db.cursor()
     c.execute(
         """
-        WITH tickets_for_performance(performanceId, tickets) AS (
-            SELECT performanceId, COUNT(*) as tickets
+        WITH tickets_for_performance(performanceId, nbr_of_tickets) AS (
+            SELECT performanceId, count(ticketId)
             FROM tickets
             GROUP BY performanceId
         )
-        SELECT performanceId, date, startTime, movies.title, movies.year, theater, capacity - count(tickets) AS remainingSeats
+        SELECT performanceId, date, startTime, title, year, theater, (capacity - coalesce(nbr_of_tickets,0)) AS remainingSeats
         FROM performances
-        LEFT OUTER JOIN movies USING (imdbKey)
-        LEFT OUTER JOIN theaters USING (theater)
+        JOIN movies USING (imdbKey)
+        JOIN theaters USING (theater)
         LEFT OUTER JOIN tickets_for_performance USING (performanceId)
         """
     )
@@ -225,17 +225,51 @@ def post_tickets():
     c = db.cursor()
     c.execute(
         """
-        """
+        SELECT username
+        FROM users
+        WHERE username = ? AND pwd = ?
+        """,
+        [ticket['username'], ticket['pwd']]
     )
-    found = [{}]
+    found = c.fetchone()
+    if not found:
+        response.status = 401
+        return "Wrong user credentials"
+    else:
+        c.execute(
+            """
+            SELECT coalesce(count(ticketId), 0) AS sold_tickets
+            FROM performances
+            LEFT OUTER JOIN tickets USING (performanceId)
+            JOIN theaters USING (theater)
+            GROUP BY performanceId
+            HAVING sold_tickets < capacity AND performanceId = ?
+            """,
+            [ticket['performanceId']]
+        )
+    found = c.fetchone()
     if not found:
         response.status = 400
-        return "Illegal..."
+        return "No tickets left"
+    else:
+        c.execute(
+            """
+            INSERT
+            INTO        tickets(username, performanceId)
+            VALUES      (?, ?)
+            RETURNING   ticketId
+            """,
+            [ticket['username'], ticket['performanceId']]
+        )
+    found = c.fetchone()
+    if not found:
+        response.status = 400
+        return "Error"
     else:
         db.commit()
         response.status = 201
-        _ = found
-        return f""
+        ticketId, = found
+        return f"/tickets/{ticketId}"
 
 # get	users/<username>/tickets    list with all tickets of the user
 @get('/users/<username>/tickets')
@@ -243,15 +277,15 @@ def get_tickets(username):
     c = db.cursor()
     c.execute(
         """
-        WITH tickets_for_user(username, performanceId, tickets) AS (
-            SELECT performanceId, username, COUNT(*) as tickets
+        WITH tickets_for_user(username, performanceId, nbrOfTickets) AS (
+            SELECT username, performanceId, count(username) AS nbrOfTickets
             FROM tickets
             GROUP BY performanceId, username
         )
-        SELECT date, startTime, theater, title, year, count(tickets) as nbrOfTickets
-        FROM tickets
-        JOIN performances ON (performanceId)
-        JOIN tickets_for_user ON (username)
+        SELECT date, startTime, theater, title, year, nbrOfTickets
+        FROM tickets_for_user
+        JOIN performances USING (performanceId)
+        JOIN movies USING (imdbKey)
         WHERE username = ?
         """,
         [username]
